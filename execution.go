@@ -28,6 +28,45 @@ func P(fs []func()) {
 	}
 }
 
+// Pe executes fs in parallel and collects errors
+func Pe(fs []func() error) error {
+	errs := make([]error, len(fs))
+	hasError := false
+
+	back := make(chan bool, len(fs))
+
+	for i := range fs {
+		go func(i int) {
+			if !hasError {
+				if err := fs[i](); err != nil {
+					hasError = true
+					errs[i] = err
+				}
+			}
+			back <- true
+		}(i)
+	}
+
+	for range fs {
+		<-back
+	}
+
+	if !hasError {
+		return nil
+	}
+
+	merr := &MultiError{
+		Msg:  "error while executing in parallel",
+		Errs: []error{},
+	}
+	for _, err := range errs {
+		if err != nil {
+			merr.Errs = append(merr.Errs, err)
+		}
+	}
+	return merr
+}
+
 // Pi executes f in parallel n times
 func Pi(n int, f func(int)) {
 	back := make(chan bool, n)
